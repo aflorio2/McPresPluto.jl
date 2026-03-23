@@ -1,0 +1,197 @@
+/* MCPresPluto — Beamer-matching slide styles
+ * Replicates doubleslides.sty + beamerthemesimple.sty layout
+ * CSS isolation via Shadow DOM — no Pluto override rules needed
+ *
+ * Beamer 4:3 default: 128mm x 96mm (aspect ratio 1.333)
+ * Margins: left 0.8cm, right 0.4cm
+ * Font: Cabin 9pt, text color #515151 (destacado)
+ * Title: bold, \large (~12pt), in \linecol color
+ * Footer: \tiny (~5pt), opacity 0.45, in \linecol color
+ * Double columns: 1% | 40% | 2% (divider) | 45% | remainder
+ */
+
+/* Font loaded via <link> tag in setup.jl — not @import (avoids blocking) */
+
+/* ===== Base slide styles ===== */
+
+.mcpres-slide {
+    font-family: 'Cabin', sans-serif;
+    font-size: var(--mcpres-font-size, 9pt);
+    color: #515151;
+    line-height: 1.45;
+    box-sizing: border-box;
+}
+
+.mcpres-slide * {
+    box-sizing: border-box;
+}
+
+/* Heading styles */
+.mcpres-slide h1,
+.mcpres-slide h2,
+.mcpres-slide h3,
+.mcpres-slide h4 {
+    color: var(--mcpres-colour);
+    font-family: 'Cabin', sans-serif;
+    margin-top: 0.3em;
+    margin-bottom: 0.2em;
+    border: none;
+    border-bottom: none;
+    box-shadow: none;
+    background: none;
+    padding-bottom: 0;
+}
+
+.mcpres-slide p {
+    margin: 0.35em 0;
+}
+
+.mcpres-slide img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* --- Title bar --- */
+.mcpres-title-bar {
+    font-weight: bold;
+    font-size: 1.25em;
+    color: var(--mcpres-colour);
+    padding: 0.55em 0 0.1em 0.65em;
+    line-height: 1.2;
+}
+
+.mcpres-title-left,
+.mcpres-title-right {
+    font-weight: bold;
+    font-size: 1.25em;
+    color: var(--mcpres-colour);
+    line-height: 1.2;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+/* --- Double slide titles --- */
+.mcpres-double-titles {
+    display: flex;
+    align-items: baseline;
+    padding: 0.55em 0 0.1em 0;
+}
+
+.mcpres-title-left {
+    width: 47%;
+    padding-left: 0.65em;
+    flex-shrink: 0;
+}
+
+.mcpres-title-spacer {
+    width: 6%;
+    flex-shrink: 0;
+}
+
+.mcpres-title-right {
+    width: 47%;
+    flex-shrink: 0;
+}
+
+/* --- Double slide panels --- */
+.mcpres-double-panels {
+    display: grid;
+    grid-template-columns: 1fr 2px 1fr;
+    gap: 0;
+    align-items: start;
+    min-height: 0;
+    padding: 0;
+}
+
+.mcpres-panel-left {
+    padding: 0.2em 1.2em 0 0.65em;
+    overflow: hidden;
+}
+
+.mcpres-panel-right {
+    padding: 0.2em 0.4em 0 1.2em;
+    overflow: hidden;
+}
+
+/* Fade divider */
+.mcpres-divider {
+    width: 2px;
+    justify-self: center;
+    align-self: stretch;
+    background: linear-gradient(
+        to bottom,
+        transparent 0%,
+        var(--mcpres-colour) 5%,
+        var(--mcpres-colour) 95%,
+        transparent 100%
+    );
+    opacity: var(--mcpres-page-opacity, 0.45);
+}
+
+/* --- Single slide content --- */
+.mcpres-content-single {
+    padding: 0.2em 0.4em 0 0.65em;
+    min-height: 0;
+}
+
+/* --- Blank slide content --- */
+.mcpres-content-blank {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 2em;
+}
+
+.mcpres-content-blank h2 {
+    font-weight: normal;
+    font-size: 1.3em;
+    color: #515151;
+    margin-bottom: 0.8em;
+    line-height: 1.3;
+}
+
+.mcpres-content-blank em {
+    font-size: 0.95em;
+    color: #515151;
+}
+
+/* --- Toggle button (notebook mode) --- */
+.mcpres-button-container {
+    text-align: center;
+    padding: 0.5em;
+}
+
+.mcpres-toggle-checkbox {
+    display: none;
+}
+
+.mcpres-toggle-label {
+    cursor: pointer;
+    padding: 0.4em 1.2em;
+    border: 2px solid var(--mcpres-colour);
+    border-radius: 6px;
+    color: var(--mcpres-colour);
+    font-family: 'Cabin', sans-serif;
+    font-weight: bold;
+    font-size: 0.95em;
+    transition: background 0.2s, color 0.2s;
+    user-select: none;
+}
+
+.mcpres-toggle-label:hover {
+    background: var(--mcpres-colour);
+    color: white;
+}
+
+/* --- Overlay base styles --- */
+.mcpres-overlay {
+    display: block;
+    border: none;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    box-shadow: none;
+    outline: none;
+}
