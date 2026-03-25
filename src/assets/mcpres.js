@@ -74,11 +74,13 @@
             // Single slide content — leave room for title + footer
             "#mcpres-content .mcpres-content-single { height: calc(100vh - 4.5em); overflow: hidden; padding-top: 0.3em; }",
 
-            // Double panels — fill available height
-            "#mcpres-content .mcpres-double-panels { height: calc(100vh - 4.5em); grid-template-columns: 47fr 2px 53fr; }",
+            // Double panels — fill available height; stretch so children get a height reference
+            "#mcpres-content .mcpres-double-panels { height: calc(100vh - 4.5em); grid-template-columns: 47fr 2px 53fr; align-items: stretch; }",
+            "#mcpres-content .mcpres-panel-left, #mcpres-content .mcpres-panel-right { min-height: 0; }",
 
-            // Blank slide — full viewport
+            // Blank slide — full viewport, constrain children
             "#mcpres-content .mcpres-content-blank { height: 100vh; width: 100vw; }",
+            "#mcpres-content .mcpres-content-blank > * { max-height: 100%; max-width: 100%; }",
 
             // Footer
             "#mcpres-footer { display: flex; position: fixed; bottom: 0; left: 0; right: 0; height: 2em; align-items: center; padding: 0 0.65em; font-family: 'Cabin', sans-serif; font-size: clamp(5pt, 0.85vw, 9pt); color: var(--mcpres-colour); opacity: var(--mcpres-page-opacity, 0.45); z-index: 1000; background: transparent; pointer-events: none; }",
@@ -92,6 +94,13 @@
             "#mcpres-nav:hover, #mcpres-nav.mcpres-nav-visible { opacity: 1; }",
             "#mcpres-nav button { background: rgba(255,255,255,0.9); border: 1px solid var(--mcpres-colour); color: var(--mcpres-colour); cursor: pointer; font-size: 0.75em; padding: 0.2em 0.6em; border-radius: 3px; font-family: 'Cabin', sans-serif; pointer-events: auto; }",
             "#mcpres-nav button:hover { background: var(--mcpres-colour); color: white; }",
+
+            // Images and SVGs — fit within their container, never overflow
+            "#mcpres-content .mcpres-slide img, #mcpres-content .mcpres-slide svg { max-width: 100%; max-height: 100%; height: auto; object-fit: contain; display: block; }",
+
+            // Overlays fill the content area so images inherit the right max-height
+            "#mcpres-content .mcpres-content-single .mcpres-overlay, #mcpres-content .mcpres-panel-left .mcpres-overlay, #mcpres-content .mcpres-panel-right .mcpres-overlay { height: 100%; }",
+            "#mcpres-content .mcpres-content-blank .mcpres-overlay { max-height: 100%; }",
 
             // KaTeX sizing inside slides
             ".mcpres-slide .katex { font-size: 1.1em; }"
@@ -412,18 +421,20 @@
             cell.style.cssText =
                 "position:fixed !important;" +
                 "z-index:100000 !important;" +
-                "bottom:3em !important;" +
+                "bottom:2.5em !important;" +
                 "left:50% !important;" +
                 "transform:translateX(-50%) !important;" +
                 "width:auto !important;" +
-                "max-width:80vw !important;" +
+                "max-width:60vw !important;" +
                 "margin:0 !important;" +
-                "padding:0.5em 1.5em !important;" +
-                "background:rgba(255,255,255,0.95) !important;" +
-                "border-radius:8px !important;" +
-                "box-shadow:0 2px 12px rgba(0,0,0,0.1) !important;" +
+                "padding:0.2em 1em !important;" +
+                "background:transparent !important;" +
+                "border:none !important;" +
+                "box-shadow:none !important;" +
                 "font-family:'Cabin',sans-serif !important;" +
-                "font-size:clamp(8pt,1.2vw,14pt) !important;";
+                "font-size:clamp(7pt,1vw,11pt) !important;" +
+                "color:var(--mcpres-colour) !important;" +
+                "opacity:0.7 !important;";
         }
 
         // Update footer
