@@ -6,9 +6,10 @@
 Single full-width slide. Matches MCPres `\\singleframe`.
 """
 function slide(title::AbstractString, content)
+    t = isempty(title) ? "\$\\phantom{\\text{A}}\$" : title
     @htl("""
     <div class="mcpres-slide" data-mcpres-slide="single">
-        <div class="mcpres-title-bar">$(title)</div>
+        <div class="mcpres-title-bar">$(t)</div>
         <div class="mcpres-content-single">
             $(content)
         </div>
@@ -27,10 +28,11 @@ Side-by-side double slide. Matches MCPres `\\doubleframe`.
 """
 function double_slide(left_title::AbstractString, right_title::AbstractString,
                       left_content, right_content)
+    lt = isempty(left_title) && isempty(right_title) ? "\$\\phantom{\\text{A}}\$" : left_title
     @htl("""
     <div class="mcpres-slide" data-mcpres-slide="double">
         <div class="mcpres-double-titles">
-            <div class="mcpres-title-left">$(left_title)</div>
+            <div class="mcpres-title-left">$(lt)</div>
             <div class="mcpres-title-spacer"></div>
             <div class="mcpres-title-right">$(right_title)</div>
         </div>
@@ -59,10 +61,11 @@ Static double slide: left panel frozen, right builds. Matches MCPres `=left - ri
 """
 function static_double_slide(left_title::AbstractString, right_title::AbstractString,
                              left_content, right_content)
+    lt = isempty(left_title) && isempty(right_title) ? "\$\\phantom{\\text{A}}\$" : left_title
     @htl("""
     <div class="mcpres-slide" data-mcpres-slide="static-double">
         <div class="mcpres-double-titles">
-            <div class="mcpres-title-left">$(left_title)</div>
+            <div class="mcpres-title-left">$(lt)</div>
             <div class="mcpres-title-spacer"></div>
             <div class="mcpres-title-right">$(right_title)</div>
         </div>
