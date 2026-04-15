@@ -209,3 +209,224 @@
     box-shadow: none;
     outline: none;
 }
+
+/* ===== Print Layout ===== */
+
+#mcpres-print-layout {
+    max-width: 310mm;
+    margin: 0 auto;
+    padding: 1em 0;
+}
+
+/* "Back to slides" button */
+#mcpres-print-back {
+    display: block;
+    margin: 0 auto 1em auto;
+    padding: 0.5em 1.5em;
+    border: 2px solid var(--mcpres-colour);
+    border-radius: 6px;
+    background: white;
+    color: var(--mcpres-colour);
+    font-family: 'Cabin', sans-serif;
+    font-weight: bold;
+    font-size: 0.95em;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+
+#mcpres-print-back:hover {
+    background: var(--mcpres-colour);
+    color: white;
+}
+
+/* Each print page = A4 landscape */
+.mcpres-print-page {
+    width: 297mm;
+    height: 210mm;
+    overflow: hidden;
+    position: relative;
+    background: white;
+    margin: 0 auto 1em auto;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+    box-sizing: border-box;
+}
+
+/* Slide fills the print page */
+.mcpres-print-page .mcpres-slide {
+    width: 297mm;
+    height: 210mm;
+    overflow: hidden;
+    position: relative;
+    font-size: clamp(8pt, 1.4vw, 16pt);
+}
+
+/* Content areas sized for print page */
+.mcpres-print-page .mcpres-content-single {
+    height: calc(210mm - 4.5em);
+    overflow: hidden;
+    padding: 1em 2em 1em 2em;
+}
+
+.mcpres-print-page .mcpres-double-panels {
+    height: calc(210mm - 4.5em);
+    grid-template-columns: 47fr 2px 53fr;
+    align-items: stretch;
+}
+
+/* More breathing room for print panels */
+.mcpres-print-page .mcpres-panel-left {
+    padding: 1em 2em 1em 2em;
+}
+
+.mcpres-print-page .mcpres-panel-right {
+    padding: 1em 2em 1em 2em;
+}
+
+.mcpres-print-page .mcpres-content-blank {
+    height: 210mm;
+    width: 297mm;
+}
+
+.mcpres-print-page .mcpres-content-blank > * {
+    max-height: 100%;
+    max-width: 100%;
+}
+
+/* Images and SVGs — fit within print page */
+.mcpres-print-page img,
+.mcpres-print-page svg {
+    max-width: 100%;
+    max-height: 80%;
+    height: auto;
+    object-fit: contain;
+    display: block;
+}
+
+/* Overlay fills content area for correct image sizing */
+.mcpres-print-page .mcpres-content-single .mcpres-overlay,
+.mcpres-print-page .mcpres-panel-left .mcpres-overlay,
+.mcpres-print-page .mcpres-panel-right .mcpres-overlay {
+    height: 100%;
+}
+
+.mcpres-print-page .mcpres-content-blank .mcpres-overlay {
+    max-height: 100%;
+}
+
+/* KaTeX sizing in print pages */
+.mcpres-print-page .katex {
+    font-size: 1.1em;
+}
+
+/* Extra cells (slide_part) in print layout */
+.mcpres-print-extra-cell {
+    position: absolute;
+    bottom: 2.5em;
+    left: 50%;
+    transform: translateX(-50%);
+    width: auto;
+    max-width: 60%;
+    font-family: 'Cabin', sans-serif;
+    font-size: clamp(7pt, 1vw, 11pt);
+    color: var(--mcpres-colour);
+    opacity: 0.7;
+    text-align: center;
+}
+
+/* Static value replacing interactive inputs */
+.mcpres-print-static-value {
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+    font-weight: bold;
+}
+
+/* Print footer at bottom of each page */
+.mcpres-print-footer {
+    display: flex;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2em;
+    align-items: center;
+    padding: 0 0.65em;
+    font-family: 'Cabin', sans-serif;
+    font-size: clamp(5pt, 0.85vw, 9pt);
+    color: var(--mcpres-colour);
+    opacity: var(--mcpres-page-opacity, 0.45);
+    pointer-events: none;
+}
+
+.mcpres-print-footer-left {
+    flex: 1;
+    text-align: left;
+}
+
+.mcpres-print-footer-right {
+    flex: 1;
+    text-align: right;
+    padding-right: 0.3em;
+}
+
+/* ===== @page — must be top-level (not nested in @media) for Chrome to apply ===== */
+/* Only takes effect during printing; zero margin suppresses Chrome's date/URL headers */
+
+@page {
+    size: A4 landscape;
+    margin: 0;
+}
+
+/* ===== @media print — Ctrl+P produces clean PDF ===== */
+
+@media print {
+    body {
+        margin: 0;
+        padding: 0;
+    }
+
+    /* Hide non-print elements */
+    #mcpres-print-back,
+    #mcpres-viewport,
+    pluto-notebook header,
+    pluto-input,
+    pluto-runarea,
+    pluto-shoulder,
+    button.add_cell,
+    nav#at_the_top,
+    footer {
+        display: none !important;
+    }
+
+    /* Remove decorative shadow and spacing in print */
+    #mcpres-print-layout {
+        padding: 0;
+        margin: 0;
+    }
+
+    .mcpres-print-page {
+        box-shadow: none;
+        margin: 0;
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    /* Preserve background colors and theme colors */
+    .mcpres-print-page,
+    .mcpres-divider,
+    .mcpres-title-bar,
+    .mcpres-title-left,
+    .mcpres-title-right,
+    .mcpres-print-footer {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    /* Chromium can drop gradients on empty elements in print — use flat color */
+    .mcpres-divider {
+        background: var(--mcpres-colour) !important;
+        opacity: var(--mcpres-page-opacity, 0.45);
+        width: 2px !important;
+        align-self: stretch !important;
+    }
+}

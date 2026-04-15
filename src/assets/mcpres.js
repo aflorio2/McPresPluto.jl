@@ -11,6 +11,7 @@
     var isSlideMode = false;
     var reapplyScheduled = false;
     var suppressObserver = false;
+    var isPrintMode = false;
 
     // Shadow DOM state
     var viewportEl = null;
@@ -261,24 +262,46 @@
 
     function gatherSlides() {
         slides = [];
-        var allCells = document.querySelectorAll("pluto-cell");
         var pageCounter = 1;
 
-        for (var i = 0; i < allCells.length; i++) {
-            var cell = allCells[i];
-            var slideDiv = cell.querySelector("[data-mcpres-slide]");
-            var partDiv = cell.querySelector("[data-mcpres-slide-part]");
+        // Collect (slideDiv, partDiv, cell) tuples from either live or static DOM
+        var allCells = document.querySelectorAll("pluto-cell");
+        var entries = []; // {slideDiv, partDiv, cell}
+
+        if (allCells.length > 0) {
+            // Live Pluto mode: slides are children of pluto-cell elements
+            for (var i = 0; i < allCells.length; i++) {
+                var cell = allCells[i];
+                entries.push({
+                    slideDiv: cell.querySelector("[data-mcpres-slide]"),
+                    partDiv:  cell.querySelector("[data-mcpres-slide-part]"),
+                    cell: cell
+                });
+            }
+        } else {
+            // Static export mode: slide divs are directly in the DOM
+            var allSlideDivs = document.querySelectorAll("[data-mcpres-slide]");
+            for (var i = 0; i < allSlideDivs.length; i++) {
+                entries.push({ slideDiv: allSlideDivs[i], partDiv: null, cell: null });
+            }
+        }
+
+        for (var i = 0; i < entries.length; i++) {
+            var e = entries[i];
+            var slideDiv = e.slideDiv;
+            var partDiv  = e.partDiv;
+            var cell     = e.cell;
 
             // slide_part() cells belong to the previous slide
             if (!slideDiv && partDiv && slides.length > 0) {
-                slides[slides.length - 1].extraCells.push(cell);
+                if (cell) slides[slides.length - 1].extraCells.push(cell);
                 continue;
             }
 
             if (slideDiv) {
                 var type = slideDiv.getAttribute("data-mcpres-slide");
                 var slideObj = {
-                    cells: [cell],
+                    cells: cell ? [cell] : [],
                     extraCells: [],
                     type: type,
                     element: slideDiv,
@@ -506,6 +529,208 @@
         }
     }
 
+    // --- Print Mode ---
+
+    function degradeInteractiveElements(container) {
+        // Replace interactive inputs with static text showing their current value
+        var inputs = container.querySelectorAll("input, select, textarea");
+        for (var i = 0; i < inputs.length; i++) {
+            var el = inputs[i];
+            var value = "";
+            if (el.tagName === "SELECT") {
+                var opt = el.options[el.selectedIndex];
+                value = opt ? opt.textContent : el.value;
+            } else if (el.type === "range") {
+                value = el.value;
+            } else if (el.type === "checkbox") {
+                value = el.checked ? "\u2611" : "\u2610";
+            } else {
+                value = el.value;
+            }
+            var span = document.createElement("span");
+            span.className = "mcpres-print-static-value";
+            span.textContent = value;
+            el.parentNode.replaceChild(span, el);
+        }
+        // Disable buttons (leave visible but clearly non-functional)
+        var buttons = container.querySelectorAll("button");
+        for (var b = 0; b < buttons.length; b++) {
+            buttons[b].disabled = true;
+            buttons[b].style.opacity = "0.5";
+            buttons[b].style.cursor = "default";
+        }
+    }
+
+    function triggerKaTeXOnPrintLayout() {
+        if (typeof renderMathInElement === "undefined") return;
+        var printSlides = document.querySelectorAll("#mcpres-print-layout [data-mcpres-slide]");
+        for (var i = 0; i < printSlides.length; i++) {
+            renderMathInElement(printSlides[i], {
+                delimiters: [
+                    {left: "$$", right: "$$", display: true},
+                    {left: "$", right: "$", display: false}
+                ],
+                throwOnError: false
+            });
+        }
+    }
+
+    function enterPrintMode() {
+        // Exit slide mode first — returns all slides to Pluto DOM
+        exitSlideMode();
+
+        isPrintMode = true;
+
+        // Inject @page rule into <head> — must be in <head> for Chrome to honour it.
+        // margin: 0 suppresses Chrome's built-in date/URL header/footer strip.
+        var pageStyle = document.createElement("style");
+        pageStyle.id = "mcpres-page-rule";
+        pageStyle.textContent = "@page { size: A4 landscape; margin: 0; }";
+        document.head.appendChild(pageStyle);
+
+        // Re-gather slides (exitSlideMode cleared state)
+        gatherSlides();
+
+        // Create print layout container
+        var layout = document.createElement("div");
+        layout.id = "mcpres-print-layout";
+        document.body.appendChild(layout);
+
+        // "Back to slides" button
+        var backBtn = document.createElement("button");
+        backBtn.id = "mcpres-print-back";
+        backBtn.textContent = "\u25C0 Back to slides";
+        backBtn.addEventListener("click", function() { exitPrintMode(true); });
+        layout.appendChild(backBtn);
+
+        // Read config for footer
+        var config = document.getElementById("mcpres-config");
+        var author = "", place = "", date = "";
+        if (config) {
+            author = config.dataset.author || "";
+            place = config.dataset.place || "";
+            date = config.dataset.date || "";
+        }
+        var footerText = [author, place, date].filter(function(s) { return s; }).join(", ");
+
+        // Clone our mcpres CSS into main DOM style block for print pages
+        var printStyle = document.createElement("style");
+        printStyle.id = "mcpres-print-styles-clone";
+        var docStyles = document.querySelectorAll("style");
+        for (var m = 0; m < docStyles.length; m++) {
+            if (docStyles[m].textContent.indexOf("--mcpres-colour") !== -1) {
+                printStyle.textContent = docStyles[m].textContent;
+                break;
+            }
+        }
+        layout.appendChild(printStyle);
+
+        // Render each slide as a print page
+        for (var i = 0; i < slides.length; i++) {
+            var slide = slides[i];
+
+            // Clone the slide element (keep originals in Pluto DOM)
+            var clone = slide.element.cloneNode(true);
+
+            // Reveal all fragments and overlays
+            applyFragments(clone, 9999);
+            applyOverlays(clone, 9999);
+
+            // Create page wrapper
+            var page = document.createElement("div");
+            page.className = "mcpres-print-page";
+            page.appendChild(clone);
+
+            // Degrade interactive elements in clone (inputs, selects, buttons from Pluto bonds)
+            degradeInteractiveElements(clone);
+
+            // Include slide_part extra cells in the print page
+            for (var j = 0; j < slide.extraCells.length; j++) {
+                var extraClone = slide.extraCells[j].cloneNode(true);
+                extraClone.style.cssText = "";
+                extraClone.className = (extraClone.className || "") + " mcpres-print-extra-cell";
+                page.appendChild(extraClone);
+            }
+
+            // Footer
+            if (slide.type !== "blank") {
+                var footer = document.createElement("div");
+                footer.className = "mcpres-print-footer";
+
+                var footerLeft = document.createElement("div");
+                footerLeft.className = "mcpres-print-footer-left";
+                footerLeft.textContent = footerText;
+
+                var footerRight = document.createElement("div");
+                footerRight.className = "mcpres-print-footer-right";
+                if ((slide.type === "double" || slide.type === "static-double") && slide.pageNum2 !== null) {
+                    footerRight.textContent = slide.pageNum + " - " + slide.pageNum2;
+                } else {
+                    footerRight.textContent = String(slide.pageNum);
+                }
+
+                footer.appendChild(footerLeft);
+                footer.appendChild(footerRight);
+                page.appendChild(footer);
+            }
+
+            layout.appendChild(page);
+        }
+
+        // Apply page breaks inline — only on non-last pages to avoid trailing blank page
+        var pages = layout.querySelectorAll(".mcpres-print-page");
+        for (var p = 0; p < pages.length - 1; p++) {
+            pages[p].style.breakAfter = "page";
+            pages[p].style.pageBreakAfter = "always";
+        }
+        if (pages.length > 0) {
+            pages[pages.length - 1].style.breakAfter = "auto";
+            pages[pages.length - 1].style.pageBreakAfter = "auto";
+        }
+
+        // Trigger KaTeX re-render on cloned slides
+        triggerKaTeXOnPrintLayout();
+
+        // Hide Pluto notebook content
+        var notebook = document.querySelector("pluto-notebook");
+        if (notebook) notebook.style.display = "none";
+
+        // Listen for keyboard (Escape to exit)
+        document.addEventListener("keydown", handlePrintKey);
+
+        // Scroll to top
+        window.scrollTo(0, 0);
+    }
+
+    function exitPrintMode(reenterSlides) {
+        isPrintMode = false;
+
+        // Remove @page rule injected into <head>
+        var pageStyle = document.getElementById("mcpres-page-rule");
+        if (pageStyle && pageStyle.parentNode) pageStyle.parentNode.removeChild(pageStyle);
+
+        // Remove print layout
+        var layout = document.getElementById("mcpres-print-layout");
+        if (layout && layout.parentNode) layout.parentNode.removeChild(layout);
+
+        // Restore Pluto notebook visibility
+        var notebook = document.querySelector("pluto-notebook");
+        if (notebook) notebook.style.display = "";
+
+        document.removeEventListener("keydown", handlePrintKey);
+
+        if (reenterSlides) {
+            enterSlideMode();
+        }
+    }
+
+    function handlePrintKey(e) {
+        if (e.key === "Escape") {
+            e.preventDefault();
+            exitPrintMode(true);
+        }
+    }
+
     // --- Navigation ---
 
     function changeSlide(delta) {
@@ -562,6 +787,11 @@
                     showSlide(slides.length - 1, last.fragments);
                 }
                 break;
+            case "p":
+            case "P":
+                e.preventDefault();
+                enterPrintMode();
+                break;
         }
     }
 
@@ -616,5 +846,14 @@
 
     // --- Start ---
     waitForPluto();
+
+    // Global API for external tools (Playwright, DevTools)
+    window.__mcpres = {
+        enterSlideMode: enterSlideMode,
+        exitSlideMode: exitSlideMode,
+        enterPrintMode: enterPrintMode,
+        exitPrintMode: exitPrintMode,
+        getSlideCount: function() { return slides.length; }
+    };
 
 })();
