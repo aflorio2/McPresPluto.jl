@@ -42,22 +42,6 @@ await page.evaluate(mcpresScript);
 await page.evaluate(() => window.__mcpres.enterPrintMode());
 await page.waitForSelector('#mcpres-print-layout', { timeout: 15000 });
 
-// Force correct layout in @media print — prevents Pluto's own print CSS from interfering
-await page.evaluate(() => {
-  const s = document.createElement('style');
-  s.textContent = `
-    @media print {
-      body > *:not(#mcpres-print-layout) { display: none !important; }
-      #mcpres-print-layout { display: block !important; padding: 0 !important; margin: 0 !important; max-width: none !important; }
-      #mcpres-print-layout .mcpres-double-panels { display: grid !important; grid-template-columns: 47fr 2px 53fr !important; height: calc(210mm - 4.5em) !important; align-items: stretch !important; }
-      #mcpres-print-layout .mcpres-panel-left, #mcpres-print-layout .mcpres-panel-right { display: block !important; min-height: 0; overflow: hidden; padding: 1em 2em !important; }
-      #mcpres-print-layout .mcpres-content-single { padding: 1em 2em !important; }
-      #mcpres-print-layout .mcpres-divider { background: var(--mcpres-colour) !important; opacity: 0.45; -webkit-print-color-adjust: exact; print-color-adjust: exact; width: 2px !important; align-self: stretch !important; }
-    }
-  `;
-  document.head.appendChild(s);
-});
-
 // Wait for KaTeX
 await page.waitForTimeout(1500);
 
@@ -66,6 +50,7 @@ await page.pdf({
   format: 'A4',
   landscape: true,
   printBackground: true,
+  preferCSSPageSize: true,
   margin: { top: '0', right: '0', bottom: '0', left: '0' },
 });
 

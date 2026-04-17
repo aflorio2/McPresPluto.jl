@@ -385,23 +385,22 @@
         padding: 0;
     }
 
-    /* Hide non-print elements */
-    #mcpres-print-back,
-    #mcpres-viewport,
-    pluto-notebook header,
-    pluto-input,
-    pluto-runarea,
-    pluto-shoulder,
-    button.add_cell,
-    nav#at_the_top,
-    footer {
+    /* Hide everything outside the print layout — Pluto chrome, notebook content, etc. */
+    body > *:not(#mcpres-print-layout) {
         display: none !important;
     }
 
-    /* Remove decorative shadow and spacing in print */
+    /* "Back to slides" button lives inside print layout — hide during actual print */
+    #mcpres-print-back {
+        display: none !important;
+    }
+
+    /* Print layout container — force layout, override Pluto/theme defaults */
     #mcpres-print-layout {
-        padding: 0;
-        margin: 0;
+        display: block !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        max-width: none !important;
     }
 
     .mcpres-print-page {
@@ -409,6 +408,28 @@
         margin: 0;
         break-inside: avoid;
         page-break-inside: avoid;
+    }
+
+    /* Double panels grid geometry — override Pluto's print CSS */
+    #mcpres-print-layout .mcpres-double-panels {
+        display: grid !important;
+        grid-template-columns: 47fr 2px 53fr !important;
+        height: calc(210mm - 4.5em) !important;
+        align-items: stretch !important;
+    }
+
+    /* Panel overflow control for print */
+    #mcpres-print-layout .mcpres-panel-left,
+    #mcpres-print-layout .mcpres-panel-right {
+        display: block !important;
+        min-height: 0;
+        overflow: hidden;
+        padding: 1em 2em !important;
+    }
+
+    /* Single-panel content padding */
+    #mcpres-print-layout .mcpres-content-single {
+        padding: 1em 2em !important;
     }
 
     /* Preserve background colors and theme colors */
@@ -422,11 +443,10 @@
         print-color-adjust: exact;
     }
 
-    /* Chromium can drop gradients on empty elements in print — use flat color */
+    /* Chromium drops backgrounds on empty elements in print — use a border instead */
     .mcpres-divider {
-        background: var(--mcpres-colour) !important;
+        background: none !important;
+        border-left: 2px solid var(--mcpres-colour);
         opacity: var(--mcpres-page-opacity, 0.45);
-        width: 2px !important;
-        align-self: stretch !important;
     }
 }
