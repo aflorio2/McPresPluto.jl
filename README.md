@@ -23,7 +23,26 @@ end
 
 ## PDF Export
 
-### One-time setup
+There are two ways to produce a PDF: the in-notebook **Export PDF** button (no extra dependencies) and a programmatic **Playwright** exporter (headless, zero-click once set up).
+
+### Option A — Export PDF button (recommended)
+
+Add `slide_button()` to your notebook; alongside the "Slide Mode" toggle you'll see an **Export PDF** button. Clicking it renders the print layout and opens your browser's print dialog.
+
+The one-time Chrome/Chromium print-dialog settings (save them as a preset):
+
+- **Destination**: Save as PDF
+- **Layout**: Landscape (usually auto-selected)
+- **Paper size**: A4
+- **Margins**: None (or "Default" — `preferCSSPageSize` makes them equivalent)
+- **More settings → Background graphics**: **ON** (required — otherwise theme colours and the divider disappear)
+- **Options → Headers and footers**: **OFF** (required — otherwise Chrome stamps a date/URL strip on every page)
+
+After the dialog closes the notebook returns to its normal view.
+
+### Option B — Playwright (headless, scripted)
+
+#### One-time setup
 
 Install Node.js (https://nodejs.org/) then install Playwright:
 

@@ -129,7 +129,9 @@ end
 """
     slide_button()
 
-Toggle button for slide mode. Press Escape to exit.
+Renders two buttons: "Slide Mode" (toggle) and "Export PDF" (one-click PDF
+via the browser's print dialog). The Export button is hidden while slide
+mode is active. Press Escape to exit slide mode.
 """
 function slide_button()
     @htl("""
@@ -138,6 +140,7 @@ function slide_button()
             <input type="checkbox" id="mcpres-toggle-input" class="mcpres-toggle-checkbox">
             <span class="mcpres-toggle-text">Slide Mode</span>
         </label>
+        <button id="mcpres-export-pdf" class="mcpres-export-pdf-button" type="button">Export PDF</button>
     </div>
     """)
 end

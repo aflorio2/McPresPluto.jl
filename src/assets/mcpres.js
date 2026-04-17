@@ -35,6 +35,7 @@
         if (stale) stale.parentNode.removeChild(stale);
 
         watchToggle();
+        watchExportButton();
     }
 
     // --- Toggle ---
@@ -60,6 +61,35 @@
                 if (isSlideMode) cb.checked = true;
             }
         }, 1000);
+    }
+
+    // --- Export PDF button ---
+    // Wires the in-notebook button to enterPrintMode() + window.print(),
+    // restoring the notebook view once the print dialog closes.
+
+    function watchExportButton() {
+        var attach = function() {
+            var btn = document.getElementById("mcpres-export-pdf");
+            if (btn && !btn._mcpresWatched) {
+                btn._mcpresWatched = true;
+                btn.addEventListener("click", function() {
+                    enterPrintMode();
+                    // Two RAFs so the print layout is painted before the dialog opens
+                    requestAnimationFrame(function() {
+                        requestAnimationFrame(function() {
+                            var afterPrint = function() {
+                                exitPrintMode(false);
+                                window.removeEventListener("afterprint", afterPrint);
+                            };
+                            window.addEventListener("afterprint", afterPrint);
+                            window.print();
+                        });
+                    });
+                });
+            }
+        };
+        attach();
+        setInterval(attach, 1000);
     }
 
     // --- Shadow DOM construction ---
