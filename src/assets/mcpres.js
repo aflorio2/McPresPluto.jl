@@ -127,7 +127,17 @@
             "#mcpres-nav button:hover { background: var(--mcpres-colour); color: white; }",
 
             // Images and SVGs — fit within their container, never overflow
-            "#mcpres-content .mcpres-slide img, #mcpres-content .mcpres-slide svg { max-width: 100%; max-height: 100%; height: auto; object-fit: contain; display: block; }",
+            // (exclude Plotly's .main-svg layers; they're handled below)
+            "#mcpres-content .mcpres-slide img, #mcpres-content .mcpres-slide svg:not(.main-svg) { max-width: 100%; max-height: 100%; height: auto; object-fit: contain; display: block; }",
+
+            // Plotly.js stacks several <svg class='main-svg'> layers (bg, plot,
+            // infolayer with titles/legend/annotations) using position:absolute
+            // via CSS injected into document.head. That CSS doesn't cross the
+            // shadow boundary, so without these rules the layers fall into flow
+            // layout and axis titles/legend/annotations render below the plot.
+            "#mcpres-content .js-plotly-plot, #mcpres-content .js-plotly-plot .plot-container { position: relative; }",
+            "#mcpres-content .js-plotly-plot .svg-container { position: relative; overflow: hidden; }",
+            "#mcpres-content .js-plotly-plot .svg-container > svg.main-svg, #mcpres-content .js-plotly-plot .svg-container > svg { position: absolute; top: 0; left: 0; }",
 
             // Overlays fill the content area so images inherit the right max-height
             "#mcpres-content .mcpres-content-single .mcpres-overlay, #mcpres-content .mcpres-panel-left .mcpres-overlay, #mcpres-content .mcpres-panel-right .mcpres-overlay { height: 100%; }",
