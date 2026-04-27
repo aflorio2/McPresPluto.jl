@@ -17,6 +17,11 @@
     var viewportEl = null;
     var shadowRoot = null;
     var contentEl = null;
+    // Light-DOM sibling of viewportEl that hosts externalized PlutoPlotly
+    // containers — they cannot live inside viewportEl (shadow host's light
+    // children are not rendered) and need a stable parent so the
+    // MutationObserver can ignore Plotly's internal subtree mutations.
+    var plotLayerEl = null;
 
     // --- Initialization ---
 
@@ -33,6 +38,8 @@
         // Clean up any stale viewport from a previous script instance
         var stale = document.getElementById("mcpres-viewport");
         if (stale) stale.parentNode.removeChild(stale);
+        var staleLayer = document.getElementById("mcpres-plot-layer");
+        if (staleLayer) staleLayer.parentNode.removeChild(staleLayer);
 
         watchToggle();
         watchExportButton();
@@ -190,6 +197,34 @@
         viewportEl.style.cssText = "position:fixed;inset:0;z-index:99999;background:white;overflow:hidden;";
         document.body.appendChild(viewportEl);
 
+        // Sibling light-DOM layer for externalized Plotly containers.
+        // Zero-size anchor — children use position:fixed so layout is unaffected.
+        plotLayerEl = document.createElement("div");
+        plotLayerEl.id = "mcpres-plot-layer";
+        plotLayerEl.style.cssText = "position:absolute;left:0;top:0;width:0;height:0;";
+        document.body.appendChild(plotLayerEl);
+
+        // Plotly's updatemenu (Play/Pause) buttons receive mousedown+mouseup but
+        // the browser does not synthesize a click — likely because the
+        // position:fixed externalization causes a subpixel layout shift during
+        // Plotly's mousedown handler and the browser classifies the gesture as
+        // a drag. Synthesize the click on mouseup so Plotly's animate handler
+        // fires. The slider ticks/drag work without this because they bind to
+        // mousedown/mousemove directly, not click.
+        plotLayerEl.addEventListener("mouseup", function(e) {
+            var btn = e.target && e.target.closest && e.target.closest(".updatemenu-button");
+            if (!btn) return;
+            btn.dispatchEvent(new MouseEvent("click", {
+                bubbles: true,
+                composed: true,
+                cancelable: true,
+                view: window,
+                clientX: e.clientX,
+                clientY: e.clientY,
+                button: 0
+            }));
+        });
+
         // Attach shadow root
         shadowRoot = viewportEl.attachShadow({ mode: "open" });
 
@@ -288,6 +323,7 @@
         suppressObserver = false;
         setupObserver();
         document.addEventListener("keydown", handleKey);
+        window.addEventListener("resize", handleWindowResize);
     }
 
     function exitSlideMode() {
@@ -305,11 +341,18 @@
         shadowRoot = null;
         contentEl = null;
 
+        // Remove plot layer (returnCurrentSlide already restored its children)
+        if (plotLayerEl && plotLayerEl.parentNode) {
+            plotLayerEl.parentNode.removeChild(plotLayerEl);
+        }
+        plotLayerEl = null;
+
         if (observer) {
             observer.disconnect();
             observer = null;
         }
         document.removeEventListener("keydown", handleKey);
+        window.removeEventListener("resize", handleWindowResize);
 
         var cb = document.getElementById("mcpres-toggle-input");
         if (cb) cb.checked = false;
@@ -434,6 +477,22 @@
         var slide = slides[currentSlide];
         var el = slide.element;
 
+        // Restore externalized PlutoPlotly containers unconditionally (must run
+        // even if the slide isn't currently in shadow, to keep cleanup idempotent).
+        if (slide.extraPlotContainers && slide.extraPlotContainers.length > 0) {
+            for (var p = 0; p < slide.extraPlotContainers.length; p++) {
+                var entry = slide.extraPlotContainers[p];
+                entry.observer.disconnect();
+                entry.container.style.cssText = '';
+                if (entry.placeholder.parentNode) {
+                    entry.placeholder.parentNode.replaceChild(entry.container, entry.placeholder);
+                } else if (entry.container.parentNode) {
+                    entry.container.parentNode.removeChild(entry.container);
+                }
+            }
+            slide.extraPlotContainers = [];
+        }
+
         // Only act if the element is currently inside our shadow root
         if (!contentEl || !contentEl.contains(el)) return;
 
@@ -491,6 +550,24 @@
 
     // --- Show slide (move real element into shadow root) ---
 
+    function syncPlotGeometry(container, placeholder) {
+        var rect = placeholder.getBoundingClientRect();
+        container.style.top = rect.top + 'px';
+        container.style.left = rect.left + 'px';
+        container.style.width = rect.width + 'px';
+        container.style.height = rect.height + 'px';
+    }
+
+    function handleWindowResize() {
+        if (!isSlideMode || slides.length === 0) return;
+        var slide = slides[currentSlide];
+        if (!slide || !slide.extraPlotContainers) return;
+        for (var p = 0; p < slide.extraPlotContainers.length; p++) {
+            var entry = slide.extraPlotContainers[p];
+            syncPlotGeometry(entry.container, entry.placeholder);
+        }
+    }
+
     function showSlide(index, fragmentIndex) {
         if (slides.length === 0 || !shadowRoot || !contentEl) return;
         if (index < 0 || index >= slides.length) return;
@@ -505,7 +582,43 @@
 
         // Move the real slide element into shadow root (preserves event handlers)
         var slide = slides[currentSlide];
+
+        // Externalize PlutoPlotly containers BEFORE the slide enters shadow DOM:
+        // D3's event delegation cannot operate across a shadow boundary, so the
+        // containers stay in light DOM (in plotLayerEl, position:fixed) with
+        // placeholders left behind in the slide to track geometry.
+        slide.extraPlotContainers = [];
+        var plotContainers = slide.element.querySelectorAll('.plutoplotly-container');
+        for (var p = 0; p < plotContainers.length; p++) {
+            (function(container) {
+                var placeholder = document.createElement('div');
+                placeholder.setAttribute('data-mcpres-plotly-placeholder', 'true');
+                container.parentNode.replaceChild(placeholder, container);
+                plotLayerEl.appendChild(container);
+                container.style.cssText =
+                    'position:fixed !important;' +
+                    'z-index:100000 !important;' +
+                    'margin:0 !important;';
+                var observer = new ResizeObserver(function() {
+                    syncPlotGeometry(container, placeholder);
+                });
+                slide.extraPlotContainers.push({
+                    container: container,
+                    placeholder: placeholder,
+                    observer: observer
+                });
+            })(plotContainers[p]);
+        }
+
         contentEl.appendChild(slide.element);
+
+        // Now that placeholders are laid out inside shadow, sync plot geometry
+        // and start observing each placeholder for size/position changes.
+        for (var q = 0; q < slide.extraPlotContainers.length; q++) {
+            var entry = slide.extraPlotContainers[q];
+            syncPlotGeometry(entry.container, entry.placeholder);
+            entry.observer.observe(entry.placeholder);
+        }
 
         // Apply fragments and overlays on the real element
         applyFragments(slide.element, currentFragment);
@@ -886,6 +999,7 @@
             for (var i = 0; i < mutations.length; i++) {
                 var m = mutations[i];
                 if (viewportEl && viewportEl.contains(m.target)) continue;
+                if (plotLayerEl && plotLayerEl.contains(m.target)) continue;
                 if (m.type === "childList" && (m.addedNodes.length > 0 || m.removedNodes.length > 0)) {
                     dominated = false;
                     break;
