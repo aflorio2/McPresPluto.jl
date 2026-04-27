@@ -36,6 +36,7 @@
 
         watchToggle();
         watchExportButton();
+        watchExportHtmlButton();
     }
 
     // --- Toggle ---
@@ -85,6 +86,40 @@
                             window.print();
                         });
                     });
+                });
+            }
+        };
+        attach();
+        setInterval(attach, 1000);
+    }
+
+    // --- Export HTML button ---
+    // Triggers a browser download of Pluto's /notebookexport?id=... endpoint
+    // (the same artifact that MCPresPluto.export_html fetches from Julia).
+
+    function watchExportHtmlButton() {
+        var attach = function() {
+            var btn = document.getElementById("mcpres-export-html");
+            if (btn && !btn._mcpresWatched) {
+                btn._mcpresWatched = true;
+                btn.addEventListener("click", function() {
+                    var params = new URLSearchParams(window.location.search);
+                    var id = params.get("id");
+                    if (!id) {
+                        alert("Could not detect notebook id from URL.\n" +
+                              "Expected format: /edit?id=NOTEBOOK_ID");
+                        return;
+                    }
+                    var secret = params.get("secret");
+                    var url = "/notebookexport?id=" + encodeURIComponent(id);
+                    if (secret) url += "&secret=" + encodeURIComponent(secret);
+                    var a = document.createElement("a");
+                    a.href = url;
+                    a.download = "slides.html";
+                    a.style.display = "none";
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
                 });
             }
         };

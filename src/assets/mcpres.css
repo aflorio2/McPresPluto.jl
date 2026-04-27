@@ -237,8 +237,29 @@
     color: white;
 }
 
-/* Hide the export button while Slide Mode is active */
-.mcpres-button-container:has(.mcpres-toggle-checkbox:checked) .mcpres-export-pdf-button {
+/* Export HTML button — matches the toggle visual */
+.mcpres-export-html-button {
+    margin-left: 0.5em;
+    padding: 0.4em 1.2em;
+    border: 2px solid var(--mcpres-colour);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--mcpres-colour);
+    font-family: 'Cabin', sans-serif;
+    font-weight: bold;
+    font-size: 0.95em;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+
+.mcpres-export-html-button:hover {
+    background: var(--mcpres-colour);
+    color: white;
+}
+
+/* Hide the export buttons while Slide Mode is active */
+.mcpres-button-container:has(.mcpres-toggle-checkbox:checked) .mcpres-export-pdf-button,
+.mcpres-button-container:has(.mcpres-toggle-checkbox:checked) .mcpres-export-html-button {
     display: none;
 }
 

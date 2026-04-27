@@ -129,9 +129,10 @@ end
 """
     slide_button()
 
-Renders two buttons: "Slide Mode" (toggle) and "Export PDF" (one-click PDF
-via the browser's print dialog). The Export button is hidden while slide
-mode is active. Press Escape to exit slide mode.
+Renders three buttons: "Slide Mode" (toggle), "Export PDF" (one-click PDF
+via the browser's print dialog), and "Export HTML" (one-click download of
+Pluto's static HTML export of the current notebook). The Export buttons are
+hidden while slide mode is active. Press Escape to exit slide mode.
 """
 function slide_button()
     @htl("""
@@ -141,6 +142,7 @@ function slide_button()
             <span class="mcpres-toggle-text">Slide Mode</span>
         </label>
         <button id="mcpres-export-pdf" class="mcpres-export-pdf-button" type="button">Export PDF</button>
+        <button id="mcpres-export-html" class="mcpres-export-html-button" type="button">Export HTML</button>
     </div>
     """)
 end

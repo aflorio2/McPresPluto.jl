@@ -1,3 +1,5 @@
+using Downloads
+
 """
     export_pdf(url; secret=nothing, output="slides.pdf")
 
@@ -62,5 +64,42 @@ playwright not found. Install it with:
     if result.exitcode != 0
         error("PDF export failed (exit code $(result.exitcode)).")
     end
+    return output_abs
+end
+
+"""
+    export_html(url; secret=nothing, output="slides.html")
+
+Save Pluto's static HTML export of the running notebook at `url` to `output`.
+The resulting file is self-contained and works offline (KaTeX/Cabin still load
+from CDN).
+
+# Arguments
+- `url`: edit URL of the running Pluto notebook
+  (e.g. `"http://localhost:1234/edit?id=<notebook-id>"`)
+- `secret`: Pluto server secret if `require_secret_for_access=true`
+- `output`: path for the output `.html` (default: `"slides.html"`)
+
+# Example
+    MCPresPluto.export_html("http://localhost:1234/edit?id=abc";
+                            secret="XXXX", output="lecture5.html")
+"""
+function export_html(url::String; secret::Union{String,Nothing}=nothing,
+                                  output::String="slides.html")
+    m_id   = match(r"[?&]id=([^&]+)", url)
+    m_base = match(r"^(https?://[^/]+)", url)
+    if isnothing(m_id) || isnothing(m_base)
+        error("Could not parse notebook URL: $url\nExpected format: http://localhost:PORT/edit?id=NOTEBOOK_ID")
+    end
+    notebook_id = m_id.captures[1]
+    base_url    = m_base.captures[1]
+
+    export_url = "$base_url/notebookexport?id=$notebook_id"
+    if !isnothing(secret)
+        export_url *= "&secret=" * secret
+    end
+
+    output_abs = abspath(output)
+    Downloads.download(export_url, output_abs)
     return output_abs
 end
