@@ -138,32 +138,43 @@
 
     function getShadowOverrideCSS() {
         return [
-            // Content container fills viewport
-            "#mcpres-content { width: 100vw; height: 100vh; overflow: hidden; position: relative; }",
+            // 4:3 slide box sized to fit the viewport, defined once on the shadow
+            // host so footer/nav (siblings of #mcpres-content) can reference it.
+            // Beamer 4:3 geometry (128mm x 96mm): width = 4/3 * height, capped by
+            // whichever viewport dimension is the binding constraint.
+            ":host { --slide-w: min(100vw, 133.333vh); --slide-h: min(75vw, 100vh); }",
 
-            // Slide fills content area with responsive font
-            "#mcpres-content .mcpres-slide { width: 100vw; height: 100vh; overflow: hidden; position: relative; background: white; font-size: clamp(8pt, 1.4vw, 16pt); }",
+            // Content container fills viewport and centers the slide box
+            "#mcpres-content { width: 100vw; height: 100vh; overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center; }",
+
+            // Slide is a centered 4:3 box; font scales with the box (no vw cap)
+            // so content keeps scaling proportionally at any screen size.
+            "#mcpres-content .mcpres-slide { width: var(--slide-w); height: var(--slide-h); overflow: hidden; position: relative; background: white; font-size: calc(var(--slide-w) * 0.014); }",
+
+            // Header (title bar) scaled up over the base 1.25em
+            "#mcpres-content .mcpres-title-bar, #mcpres-content .mcpres-title-left, #mcpres-content .mcpres-title-right { font-size: 1.8em; }",
 
             // Single slide content — leave room for title + footer
-            "#mcpres-content .mcpres-content-single { height: calc(100vh - 4.5em); overflow: hidden; padding-top: 0.3em; }",
+            "#mcpres-content .mcpres-content-single { height: calc(100% - 4.5em); overflow: hidden; padding-top: 0.3em; }",
 
             // Double panels — fill available height; stretch so children get a height reference
-            "#mcpres-content .mcpres-double-panels { height: calc(100vh - 4.5em); grid-template-columns: 47fr 2px 53fr; align-items: stretch; }",
+            "#mcpres-content .mcpres-double-panels { height: calc(100% - 4.5em); grid-template-columns: 47fr 2px 53fr; align-items: stretch; }",
             "#mcpres-content .mcpres-panel-left, #mcpres-content .mcpres-panel-right { min-height: 0; }",
 
-            // Blank slide — full viewport, constrain children
-            "#mcpres-content .mcpres-content-blank { height: 100vh; width: 100vw; }",
+            // Blank slide — fill the slide box, constrain children
+            "#mcpres-content .mcpres-content-blank { height: 100%; width: 100%; }",
             "#mcpres-content .mcpres-content-blank > * { max-height: 100%; max-width: 100%; }",
 
-            // Footer
-            "#mcpres-footer { display: flex; position: fixed; bottom: 0; left: 0; right: 0; height: 2em; align-items: center; padding: 0 0.65em; font-family: 'Cabin', sans-serif; font-size: clamp(5pt, 0.85vw, 9pt); color: var(--mcpres-colour); opacity: var(--mcpres-page-opacity, 0.45); z-index: 1000; background: transparent; pointer-events: none; }",
+            // Footer — anchored to the slide box's bottom edge (offset by the
+            // pillar/letterbox margin), not the raw viewport.
+            "#mcpres-footer { display: flex; position: fixed; bottom: calc((100vh - var(--slide-h)) / 2); left: calc((100vw - var(--slide-w)) / 2); width: var(--slide-w); height: 2em; align-items: center; padding: 0 0.65em; font-family: 'Cabin', sans-serif; font-size: calc(var(--slide-w) * 0.01224); color: var(--mcpres-colour); opacity: var(--mcpres-page-opacity, 0.45); z-index: 1000; background: transparent; pointer-events: none; }",
             "#mcpres-footer.mcpres-footer-hidden { display: none; }",
             "#mcpres-footer-left { flex: 1; text-align: left; }",
             "#mcpres-footer-center { flex: 0; width: 0; }",
             "#mcpres-footer-right { flex: 1; text-align: right; padding-right: 0.3em; }",
 
-            // Navigation controls
-            "#mcpres-nav { display: flex; position: fixed; bottom: 2.2em; right: 0.5em; gap: 0.3em; z-index: 1001; opacity: 0; transition: opacity 0.3s; }",
+            // Navigation controls — anchored to the slide box's bottom-right
+            "#mcpres-nav { display: flex; position: fixed; bottom: calc((100vh - var(--slide-h)) / 2 + 2.2em); right: calc((100vw - var(--slide-w)) / 2 + 0.5em); gap: 0.3em; z-index: 1001; opacity: 0; transition: opacity 0.3s; }",
             "#mcpres-nav:hover, #mcpres-nav.mcpres-nav-visible { opacity: 1; }",
             "#mcpres-nav button { background: rgba(255,255,255,0.9); border: 1px solid var(--mcpres-colour); color: var(--mcpres-colour); cursor: pointer; font-size: 0.75em; padding: 0.2em 0.6em; border-radius: 3px; font-family: 'Cabin', sans-serif; pointer-events: auto; }",
             "#mcpres-nav button:hover { background: var(--mcpres-colour); color: white; }",
