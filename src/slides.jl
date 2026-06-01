@@ -1,15 +1,19 @@
 # Slide layout functions — each returns an @htl blob with data-mcpres-slide markers
 
+# Render a title slot as raw HTML so color spans emitted by `mcpres --pluto`
+# (e.g. <span style="color: var(--mcpres-rougecardinal)">…</span>) are not escaped
+# by HypertextLiteral. KaTeX still scans the inner text nodes for $...$ math.
+_title(t::AbstractString) = HTML(isempty(t) ? "\$\\phantom{\\text{A}}\$" : t)
+
 """
     slide(title, content)
 
 Single full-width slide. Matches MCPres `\\singleframe`.
 """
 function slide(title::AbstractString, content)
-    t = isempty(title) ? "\$\\phantom{\\text{A}}\$" : title
     @htl("""
     <div class="mcpres-slide" data-mcpres-slide="single">
-        <div class="mcpres-title-bar">$(t)</div>
+        <div class="mcpres-title-bar">$(_title(title))</div>
         <div class="mcpres-content-single">
             $(content)
         </div>
@@ -28,13 +32,13 @@ Side-by-side double slide. Matches MCPres `\\doubleframe`.
 """
 function double_slide(left_title::AbstractString, right_title::AbstractString,
                       left_content, right_content)
-    lt = isempty(left_title) && isempty(right_title) ? "\$\\phantom{\\text{A}}\$" : left_title
+    lt = HTML(isempty(left_title) && isempty(right_title) ? "\$\\phantom{\\text{A}}\$" : left_title)
     @htl("""
     <div class="mcpres-slide" data-mcpres-slide="double">
         <div class="mcpres-double-titles">
             <div class="mcpres-title-left">$(lt)</div>
             <div class="mcpres-title-spacer"></div>
-            <div class="mcpres-title-right">$(right_title)</div>
+            <div class="mcpres-title-right">$(HTML(right_title))</div>
         </div>
         <div class="mcpres-double-panels">
             <div class="mcpres-panel-left">
@@ -61,13 +65,13 @@ Static double slide: left panel frozen, right builds. Matches MCPres `=left - ri
 """
 function static_double_slide(left_title::AbstractString, right_title::AbstractString,
                              left_content, right_content)
-    lt = isempty(left_title) && isempty(right_title) ? "\$\\phantom{\\text{A}}\$" : left_title
+    lt = HTML(isempty(left_title) && isempty(right_title) ? "\$\\phantom{\\text{A}}\$" : left_title)
     @htl("""
     <div class="mcpres-slide" data-mcpres-slide="static-double">
         <div class="mcpres-double-titles">
             <div class="mcpres-title-left">$(lt)</div>
             <div class="mcpres-title-spacer"></div>
-            <div class="mcpres-title-right">$(right_title)</div>
+            <div class="mcpres-title-right">$(HTML(right_title))</div>
         </div>
         <div class="mcpres-double-panels">
             <div class="mcpres-panel-left">

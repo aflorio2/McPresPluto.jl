@@ -17,6 +17,10 @@ function slide_setup(; author::String="", place::String="", date::String="",
     css_content = read(css_path, String)
     js_content = read(js_path, String)
 
+    # Per-color CSS variables (--mcpres-<name>) so title color spans can resolve
+    # named colors via var(--mcpres-<name>); single source of truth is COLORS.
+    color_vars = join(["        --mcpres-$(name): $(color_to_css(name));" for name in keys(COLORS)], "\n")
+
     # Build the full CSS with variables prepended
     css_vars = """
     :root {
@@ -24,6 +28,7 @@ function slide_setup(; author::String="", place::String="", date::String="",
         --mcpres-line-opacity: $(line_opacity);
         --mcpres-page-opacity: $(page_opacity);
         --mcpres-font-size: $(font_size)pt;
+$(color_vars)
     }
     """
     full_css = css_vars * "\n" * css_content
