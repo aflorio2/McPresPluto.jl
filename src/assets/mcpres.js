@@ -22,6 +22,10 @@
     // children are not rendered) and need a stable parent so the
     // MutationObserver can ignore Plotly's internal subtree mutations.
     var plotLayerEl = null;
+    // The slide element currently shown IN PLACE (light DOM, not moved into the
+    // shadow) because it contains a live WGLMakie/Bonito figure that cannot be
+    // relocated without Pluto re-rendering it. The observer ignores its subtree.
+    var inPlaceEl = null;
 
     // --- Initialization ---
 
@@ -201,6 +205,41 @@
         ].join("\n");
     }
 
+    // Inject (once) the light-DOM CSS that styles an in-place Makie figure slide as
+    // a centered fullscreen 4:3 box over the white viewport overlay. Mirrors the
+    // single-slide rules from getShadowOverrideCSS(), but lives in document.head
+    // (light DOM) because the figure slide is never moved into the shadow root.
+    // NOTE: only translate/positioning is applied to the slide box — the canvas is
+    // never CSS-scaled (that would break WGLMakie's fixed winscale → offset clicks).
+    function ensureMakieInPlaceCSS() {
+        if (document.getElementById("mcpres-makie-inplace-css")) return;
+        var style = document.createElement("style");
+        style.id = "mcpres-makie-inplace-css";
+        style.textContent = [
+            ".mcpres-makie-fullscreen {",
+            "  position: fixed !important;",
+            "  top: 50% !important; left: 50% !important;",
+            "  transform: translate(-50%, -50%) !important;",
+            "  width: min(100vw, 133.333vh) !important;",
+            "  height: min(75vw, 100vh) !important;",
+            "  margin: 0 !important;",
+            "  background: white !important;",
+            "  overflow: hidden !important;",
+            "  z-index: 100001 !important;",
+            "  font-size: calc(min(100vw, 133.333vh) * 0.014) !important;",
+            "}",
+            ".mcpres-makie-fullscreen .mcpres-title-bar,",
+            ".mcpres-makie-fullscreen .mcpres-title-left,",
+            ".mcpres-makie-fullscreen .mcpres-title-right { font-size: 1.8em !important; }",
+            ".mcpres-makie-fullscreen .mcpres-content-single {",
+            "  height: calc(100% - 4.5em) !important;",
+            "  overflow: hidden !important;",
+            "  padding-top: 0.3em !important;",
+            "}"
+        ].join("\n");
+        document.head.appendChild(style);
+    }
+
     function buildShadowDOM() {
         // Create full-viewport overlay
         viewportEl = document.createElement("div");
@@ -323,8 +362,31 @@
 
     // --- Enter / Exit slide mode ---
 
+    // WGLMakie's check_screen() disposes its WebGL context when
+    // document.body.contains(canvas) is false, but Node.contains() does not pierce
+    // shadow boundaries. While in slide mode, treat any connected node (isConnected
+    // traverses shadow trees) as contained by body, so externalized figures — and
+    // figures transiently re-entering the shadow overlay during navigation — are
+    // never torn down. Scoped to document.body only; MCPresPluto's own containment
+    // checks use contentEl/viewportEl/plotLayerEl, so they are unaffected.
+    function installContainsShim() {
+        if (Object.prototype.hasOwnProperty.call(document.body, "contains")) return;
+        var body = document.body;
+        body.contains = function(node) {
+            if (node && node.isConnected) return true;
+            return Node.prototype.contains.call(body, node);
+        };
+    }
+
+    function uninstallContainsShim() {
+        if (Object.prototype.hasOwnProperty.call(document.body, "contains")) {
+            delete document.body.contains;
+        }
+    }
+
     function enterSlideMode() {
         isSlideMode = true;
+        installContainsShim();
         suppressObserver = true;
         gatherSlides();
         buildShadowDOM();
@@ -339,6 +401,7 @@
 
     function exitSlideMode() {
         isSlideMode = false;
+        uninstallContainsShim();
         suppressObserver = true;
 
         // Return current slide to its Pluto cell before destroying viewport
@@ -488,6 +551,24 @@
         var slide = slides[currentSlide];
         var el = slide.element;
 
+        // In-place Makie figure slide: it was never moved into the shadow, only
+        // styled fullscreen. Restore it by removing the class + extra-cell styling;
+        // the element stays in its Pluto cell (the figure is never disturbed).
+        if (slide._mcpresInPlace) {
+            el.classList.remove("mcpres-makie-fullscreen");
+            resetFragmentStyles(el);
+            for (var ci = 0; ci < slide.extraCells.length; ci++) {
+                var ic = slide.extraCells[ci];
+                if (ic._mcpresOrigStyle !== undefined) {
+                    ic.style.cssText = ic._mcpresOrigStyle;
+                    delete ic._mcpresOrigStyle;
+                }
+            }
+            slide._mcpresInPlace = false;
+            if (inPlaceEl === el) inPlaceEl = null;
+            return;
+        }
+
         // Restore externalized PlutoPlotly containers unconditionally (must run
         // even if the slide isn't currently in shadow, to keep cleanup idempotent).
         if (slide.extraPlotContainers && slide.extraPlotContainers.length > 0) {
@@ -621,7 +702,24 @@
             })(plotContainers[p]);
         }
 
-        contentEl.appendChild(slide.element);
+        // Live WGLMakie/Bonito figures CANNOT leave their Pluto output wrapper:
+        // moving the figure DOM (even moving the whole slide into the shadow) makes
+        // Pluto continuously re-render the figure, which detaches/disposes it and
+        // triggers an endless re-show loop. So a slide that contains a Makie figure
+        // is shown IN PLACE — its element stays in its Pluto cell (light DOM, where
+        // the canvas renders and the slider is interactive) and is styled as a
+        // fullscreen slide on top of the white viewport overlay. All other slides
+        // move into the shadow overlay as before (full CSS isolation).
+        var isMakieSlide = !!slide.element.querySelector("canvas, .bonito-fragment");
+        if (isMakieSlide) {
+            ensureMakieInPlaceCSS();
+            slide._mcpresInPlace = true;
+            inPlaceEl = slide.element;
+            slide.element.classList.add("mcpres-makie-fullscreen");
+        } else {
+            slide._mcpresInPlace = false;
+            contentEl.appendChild(slide.element);
+        }
 
         // Now that placeholders are laid out inside shadow, sync plot geometry
         // and start observing each placeholder for size/position changes.
@@ -1011,6 +1109,10 @@
                 var m = mutations[i];
                 if (viewportEl && viewportEl.contains(m.target)) continue;
                 if (plotLayerEl && plotLayerEl.contains(m.target)) continue;
+                // Ignore mutations inside an in-place Makie figure slide (the live
+                // figure and KaTeX re-renders mutate it constantly; reacting would
+                // re-show it endlessly).
+                if (inPlaceEl && inPlaceEl.contains(m.target)) continue;
                 if (m.type === "childList" && (m.addedNodes.length > 0 || m.removedNodes.length > 0)) {
                     dominated = false;
                     break;
