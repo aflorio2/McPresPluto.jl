@@ -79,6 +79,18 @@
     left: 0;
 }
 
+/* WGLMakie/Bonito support: a live figure is a fixed-size display:block
+   <canvas> inside a width:100% Bonito wrapper div — it matches neither the
+   img/svg rule nor the Plotly rule above, so it left-anchors in the wide
+   content area. Center via margin only — never CSS-scale the canvas (that
+   would offset WGLMakie's click coordinates). Would need revisiting if a
+   figure ever uses use_html_widgets=true (its HTML overlay is positioned
+   off the width:100% wrapper, not the centered canvas). */
+.mcpres-slide .bonito-fragment canvas {
+    margin-left: auto;
+    margin-right: auto;
+}
+
 /* --- Title bar --- */
 .mcpres-title-bar {
     font-weight: bold;

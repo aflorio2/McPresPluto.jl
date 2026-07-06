@@ -288,6 +288,10 @@
             "  height: calc(100% - 4.5em) !important;",
             "  overflow: hidden !important;",
             "  padding-top: 0.3em !important;",
+            // The canvas keeps its fixed pixel size (no CSS scaling), so center
+            // it in the fullscreen box instead of letting space-between pin it
+            // to the top edge.
+            "  justify-content: center !important;",
             "}"
         ].join("\n");
         document.head.appendChild(style);
