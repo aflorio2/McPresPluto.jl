@@ -2,7 +2,9 @@
  * Replicates doubleslides.sty + beamerthemesimple.sty layout
  * CSS isolation via Shadow DOM — no Pluto override rules needed
  *
- * Beamer 4:3 default: 128mm x 96mm (aspect ratio 1.333)
+ * Slide aspect ratio (width/height) is configurable via slide_setup(aspect=...),
+ * default :widescreen (16:9). --mcpres-aspect and --mcpres-page-h (PDF page
+ * height for a 297mm-wide sheet) are set in the :root block by setup.jl.
  * Margins: left 0.8cm, right 0.4cm
  * Font: Cabin 9pt, text color #515151 (destacado)
  * Title: bold, \large (~12pt), in \linecol color
@@ -52,14 +54,19 @@
     max-height: 100%;
     height: auto;
     object-fit: contain;
+    display: block;
+    margin: 0 auto;
 }
 
 /* Plotly.js support: its <svg class="main-svg"> layers must not be resized
    by the blanket rule above, and must stack via position:absolute (see the
-   shadow-DOM override in mcpres.js for the full explanation). */
+   shadow-DOM override in mcpres.js for the full explanation). Centers the
+   plot container itself — fixed-width figures no longer left-anchor now that
+   the widescreen content area is much wider than the figure. */
 .mcpres-slide .js-plotly-plot,
 .mcpres-slide .js-plotly-plot .plot-container {
     position: relative;
+    margin: 0 auto;
 }
 .mcpres-slide .js-plotly-plot .svg-container {
     position: relative;
@@ -303,10 +310,10 @@
     color: white;
 }
 
-/* Each print page = A4 landscape */
+/* Each print page = 297mm wide, height set by --mcpres-page-h (aspect ratio) */
 .mcpres-print-page {
     width: 297mm;
-    height: 210mm;
+    height: var(--mcpres-page-h);
     overflow: hidden;
     position: relative;
     background: white;
@@ -318,7 +325,7 @@
 /* Slide fills the print page */
 .mcpres-print-page .mcpres-slide {
     width: 297mm;
-    height: 210mm;
+    height: var(--mcpres-page-h);
     overflow: hidden;
     position: relative;
     font-size: clamp(8pt, 1.4vw, 16pt);
@@ -326,13 +333,13 @@
 
 /* Content areas sized for print page */
 .mcpres-print-page .mcpres-content-single {
-    height: calc(210mm - 4.5em);
+    height: calc(var(--mcpres-page-h) - 4.5em);
     overflow: hidden;
     padding: 1em 2em 1em 2em;
 }
 
 .mcpres-print-page .mcpres-double-panels {
-    height: calc(210mm - 4.5em);
+    height: calc(var(--mcpres-page-h) - 4.5em);
     grid-template-columns: 47fr 2px 53fr;
     align-items: stretch;
 }
@@ -347,7 +354,7 @@
 }
 
 .mcpres-print-page .mcpres-content-blank {
-    height: 210mm;
+    height: var(--mcpres-page-h);
     width: 297mm;
 }
 
@@ -356,7 +363,7 @@
     max-width: 100%;
 }
 
-/* Images and SVGs — fit within print page */
+/* Images and SVGs — fit within print page, centered */
 .mcpres-print-page img,
 .mcpres-print-page svg {
     max-width: 100%;
@@ -364,6 +371,7 @@
     height: auto;
     object-fit: contain;
     display: block;
+    margin: 0 auto;
 }
 
 /* Overlay fills content area for correct image sizing */
@@ -434,7 +442,10 @@
 }
 
 /* ===== @page — must be top-level (not nested in @media) for Chrome to apply ===== */
-/* Only takes effect during printing; zero margin suppresses Chrome's date/URL headers */
+/* Only takes effect during printing; zero margin suppresses Chrome's date/URL headers.
+ * Fallback only — CSS custom properties aren't honored inside @page {size}, so
+ * setup.jl appends a literal 297mm x <page-h>mm override after this file's CSS,
+ * and mcpres.js re-injects the same literal size into <head> on print entry. */
 
 @page {
     size: A4 landscape;
@@ -478,7 +489,7 @@
     #mcpres-print-layout .mcpres-double-panels {
         display: grid !important;
         grid-template-columns: 47fr 2px 53fr !important;
-        height: calc(210mm - 4.5em) !important;
+        height: calc(var(--mcpres-page-h) - 4.5em) !important;
         align-items: stretch !important;
     }
 

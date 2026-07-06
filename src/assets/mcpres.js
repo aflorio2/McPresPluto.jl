@@ -142,17 +142,18 @@
 
     function getShadowOverrideCSS() {
         return [
-            // 4:3 slide box sized to fit the viewport, defined once on the shadow
-            // host so footer/nav (siblings of #mcpres-content) can reference it.
-            // Beamer 4:3 geometry (128mm x 96mm): width = 4/3 * height, capped by
+            // Slide box sized to fit the viewport at --mcpres-aspect (width/height),
+            // defined once on the shadow host so footer/nav (siblings of
+            // #mcpres-content) can reference it. Width = aspect * height, capped by
             // whichever viewport dimension is the binding constraint.
-            ":host { --slide-w: min(100vw, 133.333vh); --slide-h: min(75vw, 100vh); }",
+            ":host { --slide-w: min(100vw, calc(var(--mcpres-aspect) * 100vh)); --slide-h: min(calc(100vw / var(--mcpres-aspect)), 100vh); }",
 
             // Content container fills viewport and centers the slide box
             "#mcpres-content { width: 100vw; height: 100vh; overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center; }",
 
-            // Slide is a centered 4:3 box; font scales with the box (no vw cap)
-            // so content keeps scaling proportionally at any screen size.
+            // Slide is a centered box at the configured aspect ratio; font scales
+            // with the box (no vw cap) so content keeps scaling proportionally at
+            // any screen size.
             "#mcpres-content .mcpres-slide { width: var(--slide-w); height: var(--slide-h); overflow: hidden; position: relative; background: white; font-size: calc(var(--slide-w) * 0.014); }",
 
             // Header (title bar) scaled up over the base 1.25em
@@ -171,7 +172,12 @@
 
             // Footer — anchored to the slide box's bottom edge (offset by the
             // pillar/letterbox margin), not the raw viewport.
-            "#mcpres-footer { display: flex; position: fixed; bottom: calc((100vh - var(--slide-h)) / 2); left: calc((100vw - var(--slide-w)) / 2); width: var(--slide-w); height: 2em; align-items: center; padding: 0 0.65em; font-family: 'Cabin', sans-serif; font-size: calc(var(--slide-w) * 0.01224); color: var(--mcpres-colour); opacity: var(--mcpres-page-opacity, 0.45); z-index: 1000; background: transparent; pointer-events: none; }",
+            // box-sizing:border-box keeps the footer's rendered width exactly at
+            // --slide-w — without it, the horizontal padding below adds on top,
+            // overflowing past the slide box's right edge (page number gets cut
+            // off) whenever the pillarbox margin is small or zero, which is the
+            // common case now that 16:9 often matches the screen's own ratio.
+            "#mcpres-footer { display: flex; position: fixed; box-sizing: border-box; bottom: calc((100vh - var(--slide-h)) / 2); left: calc((100vw - var(--slide-w)) / 2); width: var(--slide-w); height: 2em; align-items: center; padding: 0 0.65em; font-family: 'Cabin', sans-serif; font-size: calc(var(--slide-w) * 0.01224); color: var(--mcpres-colour); opacity: var(--mcpres-page-opacity, 0.45); z-index: 1000; background: transparent; pointer-events: none; }",
             "#mcpres-footer.mcpres-footer-hidden { display: none; }",
             "#mcpres-footer-left { flex: 1; text-align: left; }",
             "#mcpres-footer-center { flex: 0; width: 0; }",
@@ -183,16 +189,20 @@
             "#mcpres-nav button { background: rgba(255,255,255,0.9); border: 1px solid var(--mcpres-colour); color: var(--mcpres-colour); cursor: pointer; font-size: 0.75em; padding: 0.2em 0.6em; border-radius: 3px; font-family: 'Cabin', sans-serif; pointer-events: auto; }",
             "#mcpres-nav button:hover { background: var(--mcpres-colour); color: white; }",
 
-            // Images and SVGs — fit within their container, never overflow
-            // (exclude Plotly's .main-svg layers; they're handled below)
-            "#mcpres-content .mcpres-slide img, #mcpres-content .mcpres-slide svg:not(.main-svg) { max-width: 100%; max-height: 100%; height: auto; object-fit: contain; display: block; }",
+            // Images and SVGs — fit within their container, never overflow, and
+            // stay centered now that the widescreen content area is often much
+            // wider than a fixed-size figure (exclude Plotly's .main-svg layers;
+            // they're handled below)
+            "#mcpres-content .mcpres-slide img, #mcpres-content .mcpres-slide svg:not(.main-svg) { max-width: 100%; max-height: 100%; height: auto; object-fit: contain; display: block; margin: 0 auto; }",
 
             // Plotly.js stacks several <svg class='main-svg'> layers (bg, plot,
             // infolayer with titles/legend/annotations) using position:absolute
             // via CSS injected into document.head. That CSS doesn't cross the
             // shadow boundary, so without these rules the layers fall into flow
             // layout and axis titles/legend/annotations render below the plot.
-            "#mcpres-content .js-plotly-plot, #mcpres-content .js-plotly-plot .plot-container { position: relative; }",
+            // margin:auto centers fixed-width plot containers within the (now
+            // wider) content area.
+            "#mcpres-content .js-plotly-plot, #mcpres-content .js-plotly-plot .plot-container { position: relative; margin: 0 auto; }",
             "#mcpres-content .js-plotly-plot .svg-container { position: relative; overflow: hidden; }",
             "#mcpres-content .js-plotly-plot .svg-container > svg.main-svg, #mcpres-content .js-plotly-plot .svg-container > svg { position: absolute; top: 0; left: 0; }",
 
@@ -205,10 +215,53 @@
         ].join("\n");
     }
 
+    // position:fixed on the in-place Makie slide is positioned relative to the
+    // viewport ONLY if no ancestor establishes its own containing block (any
+    // ancestor with transform/filter/perspective/contain/will-change/backdrop-filter
+    // set to a non-default value). WGLMakie/Bonito's own wrapper markup around the
+    // canvas can set one of these (observed: the fullscreen slide renders pinned to
+    // its normal in-page position instead of centered over the viewport). Rather
+    // than depend on knowing exactly which ancestor/library does this, walk up and
+    // neutralize any offending ancestor for as long as the slide is shown fullscreen,
+    // restoring the original inline style on exit.
+    function clearContainingBlockAncestors(el) {
+        var cleared = [];
+        var node = el.parentElement;
+        while (node) {
+            var cs = getComputedStyle(node);
+            var establishesContainingBlock =
+                cs.transform !== "none" ||
+                cs.filter !== "none" ||
+                cs.perspective !== "none" ||
+                (cs.contain && cs.contain !== "none") ||
+                (cs.willChange && cs.willChange.indexOf("transform") !== -1) ||
+                (cs.backdropFilter && cs.backdropFilter !== "none");
+            if (establishesContainingBlock) {
+                cleared.push({ node: node, origStyle: node.style.cssText });
+                node.style.setProperty("transform", "none", "important");
+                node.style.setProperty("filter", "none", "important");
+                node.style.setProperty("perspective", "none", "important");
+                node.style.setProperty("contain", "none", "important");
+                node.style.setProperty("will-change", "auto", "important");
+                node.style.setProperty("backdrop-filter", "none", "important");
+            }
+            if (node === document.documentElement) break;
+            node = node.parentElement;
+        }
+        return cleared;
+    }
+
+    function restoreContainingBlockAncestors(cleared) {
+        for (var i = 0; i < cleared.length; i++) {
+            cleared[i].node.style.cssText = cleared[i].origStyle;
+        }
+    }
+
     // Inject (once) the light-DOM CSS that styles an in-place Makie figure slide as
-    // a centered fullscreen 4:3 box over the white viewport overlay. Mirrors the
-    // single-slide rules from getShadowOverrideCSS(), but lives in document.head
-    // (light DOM) because the figure slide is never moved into the shadow root.
+    // a centered fullscreen box (at --mcpres-aspect) over the white viewport overlay.
+    // Mirrors the single-slide rules from getShadowOverrideCSS(), but lives in
+    // document.head (light DOM) because the figure slide is never moved into the
+    // shadow root.
     // NOTE: only translate/positioning is applied to the slide box — the canvas is
     // never CSS-scaled (that would break WGLMakie's fixed winscale → offset clicks).
     function ensureMakieInPlaceCSS() {
@@ -220,13 +273,13 @@
             "  position: fixed !important;",
             "  top: 50% !important; left: 50% !important;",
             "  transform: translate(-50%, -50%) !important;",
-            "  width: min(100vw, 133.333vh) !important;",
-            "  height: min(75vw, 100vh) !important;",
+            "  width: min(100vw, calc(var(--mcpres-aspect) * 100vh)) !important;",
+            "  height: min(calc(100vw / var(--mcpres-aspect)), 100vh) !important;",
             "  margin: 0 !important;",
             "  background: white !important;",
             "  overflow: hidden !important;",
             "  z-index: 100001 !important;",
-            "  font-size: calc(min(100vw, 133.333vh) * 0.014) !important;",
+            "  font-size: calc(min(100vw, calc(var(--mcpres-aspect) * 100vh)) * 0.014) !important;",
             "}",
             ".mcpres-makie-fullscreen .mcpres-title-bar,",
             ".mcpres-makie-fullscreen .mcpres-title-left,",
@@ -557,6 +610,10 @@
         if (slide._mcpresInPlace) {
             el.classList.remove("mcpres-makie-fullscreen");
             resetFragmentStyles(el);
+            if (slide._mcpresClearedAncestors) {
+                restoreContainingBlockAncestors(slide._mcpresClearedAncestors);
+                slide._mcpresClearedAncestors = null;
+            }
             for (var ci = 0; ci < slide.extraCells.length; ci++) {
                 var ic = slide.extraCells[ci];
                 if (ic._mcpresOrigStyle !== undefined) {
@@ -715,6 +772,7 @@
             ensureMakieInPlaceCSS();
             slide._mcpresInPlace = true;
             inPlaceEl = slide.element;
+            slide._mcpresClearedAncestors = clearContainingBlockAncestors(slide.element);
             slide.element.classList.add("mcpres-makie-fullscreen");
         } else {
             slide._mcpresInPlace = false;
@@ -880,9 +938,14 @@
 
         // Inject @page rule into <head> — must be in <head> for Chrome to honour it.
         // margin: 0 suppresses Chrome's built-in date/URL header/footer strip.
+        // Page is 297mm wide (A4 landscape width); height follows the notebook's
+        // configured aspect ratio (data-page-h, set by slide_setup) so the export
+        // matches the on-screen slide box — falls back to the 16:9 default.
+        var pageConfig = document.getElementById("mcpres-config");
+        var pageHeightMm = (pageConfig && pageConfig.dataset.pageH) ? pageConfig.dataset.pageH : "167.06";
         var pageStyle = document.createElement("style");
         pageStyle.id = "mcpres-page-rule";
-        pageStyle.textContent = "@page { size: A4 landscape; margin: 0; }";
+        pageStyle.textContent = "@page { size: 297mm " + pageHeightMm + "mm; margin: 0; }";
         document.head.appendChild(pageStyle);
 
         // Re-gather slides (exitSlideMode cleared state)

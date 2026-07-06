@@ -21,6 +21,19 @@ slide("Slide with bullets") do
 end
 ```
 
+### Aspect ratio
+
+Slides default to 16:9 (`:widescreen`). Pass `aspect` to `slide_setup` for the
+legacy 4:3 beamer ratio, or any custom `width/height` number:
+
+```julia
+slide_setup(aspect = :standard)  # 4:3
+slide_setup(aspect = 1.5)        # custom ratio
+```
+
+This controls both the on-screen slide box and the exported PDF's page size
+(always 297mm wide, height scaled to match the ratio).
+
 ## PDF Export
 
 There are two ways to produce a PDF: the in-notebook **Export PDF** button (no extra dependencies) and a programmatic **Playwright** exporter (headless, zero-click once set up).
@@ -33,7 +46,8 @@ The one-time Chrome/Chromium print-dialog settings (save them as a preset):
 
 - **Destination**: Save as PDF
 - **Layout**: Landscape (usually auto-selected)
-- **Paper size**: A4
+- **Paper size**: Default (Chrome picks up the page size — 297mm wide, height set by
+  the notebook's `aspect` — from the page's own `@page` rule)
 - **Margins**: None (or "Default" — `preferCSSPageSize` makes them equivalent)
 - **More settings → Background graphics**: **ON** (required — otherwise theme colours and the divider disappear)
 - **Options → Headers and footers**: **OFF** (required — otherwise Chrome stamps a date/URL strip on every page)
