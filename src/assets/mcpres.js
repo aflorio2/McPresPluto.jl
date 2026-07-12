@@ -17,6 +17,8 @@
     var viewportEl = null;
     var shadowRoot = null;
     var contentEl = null;
+    // Root overflow saved while slide mode locks the document scrollbar
+    var prevRootOverflow = "";
     // Light-DOM sibling of viewportEl that hosts externalized PlutoPlotly
     // containers — they cannot live inside viewportEl (shadow host's light
     // children are not rendered) and need a stable parent so the
@@ -162,8 +164,11 @@
             // Single slide content — leave room for title + footer
             "#mcpres-content .mcpres-content-single { height: calc(100% - 4.5em); overflow: hidden; padding-top: 0.3em; }",
 
-            // Double panels — fill available height; stretch so children get a height reference
-            "#mcpres-content .mcpres-double-panels { height: calc(100% - 4.5em); grid-template-columns: 47fr 2px 53fr; align-items: stretch; }",
+            // Double panels — fill available height; stretch so children get a height reference.
+            // 49.1/50.9 puts the divider where the PDF renders it (measured on the
+            // beamer output: columns 0.4/0.02/0.45\textwidth + stretch + asymmetric
+            // margins land the separatrix at 49.1% of the page width).
+            "#mcpres-content .mcpres-double-panels { height: calc(100% - 4.5em); grid-template-columns: 49.1fr 2px 50.9fr; align-items: stretch; }",
             "#mcpres-content .mcpres-panel-left, #mcpres-content .mcpres-panel-right { min-height: 0; }",
 
             // Blank slide — fill the slide box, constrain children
@@ -180,7 +185,9 @@
             "#mcpres-footer { display: flex; position: fixed; box-sizing: border-box; bottom: calc((100vh - var(--slide-h)) / 2); left: calc((100vw - var(--slide-w)) / 2); width: var(--slide-w); height: 2em; align-items: center; padding: 0 0.65em; font-family: 'Cabin', sans-serif; font-size: calc(var(--slide-w) * 0.01224); color: var(--mcpres-colour); opacity: var(--mcpres-page-opacity, 0.45); z-index: 1000; background: transparent; pointer-events: none; }",
             "#mcpres-footer.mcpres-footer-hidden { display: none; }",
             "#mcpres-footer-left { flex: 1; text-align: left; }",
-            "#mcpres-footer-center { flex: 0; width: 0; }",
+            // Centered ON the panel separatrix (grid 49.1fr 2px 50.9fr → 49.1%),
+            // not the page midline. Absolute, so left/right keep splitting the row.
+            "#mcpres-footer-center { position: absolute; left: 49.1%; transform: translateX(-50%); }",
             "#mcpres-footer-right { flex: 1; text-align: right; padding-right: 0.3em; }",
 
             // Navigation controls — anchored to the slide box's bottom-right
@@ -265,21 +272,37 @@
     // NOTE: only translate/positioning is applied to the slide box — the canvas is
     // never CSS-scaled (that would break WGLMakie's fixed winscale → offset clicks).
     function ensureMakieInPlaceCSS() {
-        if (document.getElementById("mcpres-makie-inplace-css")) return;
-        var style = document.createElement("style");
-        style.id = "mcpres-makie-inplace-css";
+        // Always rewrite the content (don't return early if the element exists):
+        // a slide_setup re-run injects a NEW copy of this script, and a stale
+        // style element from the previous script instance would otherwise pin
+        // the old CSS until a full page reload.
+        var style = document.getElementById("mcpres-makie-inplace-css");
+        var created = false;
+        if (!style) {
+            style = document.createElement("style");
+            style.id = "mcpres-makie-inplace-css";
+            created = true;
+        }
         style.textContent = [
+            // Positioning MUST use the same math as the shadow overlay's flex
+            // centering (100vw/100vh-based calc), NOT left:50% + translate: fixed
+            // percentages resolve against the viewport minus the scrollbar while
+            // vw units include it, so the two schemes disagree by half a scrollbar
+            // width and the slide box would shift on entering an in-place slide.
             ".mcpres-makie-fullscreen {",
+            "  --slide-w: min(100vw, calc(var(--mcpres-aspect) * 100vh));",
+            "  --slide-h: min(calc(100vw / var(--mcpres-aspect)), 100vh);",
             "  position: fixed !important;",
-            "  top: 50% !important; left: 50% !important;",
-            "  transform: translate(-50%, -50%) !important;",
-            "  width: min(100vw, calc(var(--mcpres-aspect) * 100vh)) !important;",
-            "  height: min(calc(100vw / var(--mcpres-aspect)), 100vh) !important;",
+            "  top: calc((100vh - var(--slide-h)) / 2) !important;",
+            "  left: calc((100vw - var(--slide-w)) / 2) !important;",
+            "  transform: none !important;",
+            "  width: var(--slide-w) !important;",
+            "  height: var(--slide-h) !important;",
             "  margin: 0 !important;",
             "  background: white !important;",
             "  overflow: hidden !important;",
             "  z-index: 100001 !important;",
-            "  font-size: calc(min(100vw, calc(var(--mcpres-aspect) * 100vh)) * 0.014) !important;",
+            "  font-size: calc(var(--slide-w) * 0.014) !important;",
             "}",
             ".mcpres-makie-fullscreen .mcpres-title-bar,",
             ".mcpres-makie-fullscreen .mcpres-title-left,",
@@ -292,9 +315,52 @@
             // it in the fullscreen box instead of letting space-between pin it
             // to the top edge.
             "  justify-content: center !important;",
-            "}"
+            "}",
+            // Double slide with a live Makie panel — mirror the shadow override's
+            // double rules so the panels fill the fullscreen box.
+            ".mcpres-makie-fullscreen .mcpres-double-panels {",
+            "  height: calc(100% - 4.5em) !important;",
+            "  grid-template-columns: 49.1fr 2px 50.9fr !important;",
+            "  align-items: stretch !important;",
+            "}",
+            ".mcpres-makie-fullscreen .mcpres-panel-left,",
+            ".mcpres-makie-fullscreen .mcpres-panel-right {",
+            "  min-height: 0 !important;",
+            "  overflow: hidden !important;",
+            // NO justify-content override: regular double slides pin panel
+            // content to the top (space-between) — centering only the live
+            // slide's panels made its content sit visibly lower than on every
+            // other double slide.
+            "}",
+            // Shadow slides get '.mcpres-slide .katex { font-size: 1.1em }' from
+            // getShadowOverrideCSS(); in the light DOM KaTeX's stock stylesheet
+            // sets 1.21em instead. Titles are KaTeX phantoms, so without this the
+            // in-place slide's title strut is ~10% taller and every panel below
+            // it sits a few px lower than on shadow slides.
+            ".mcpres-makie-fullscreen .katex { font-size: 1.1em !important; }",
+            // Light-DOM footer clone for in-place slides: the real footer lives in
+            // the shadow overlay (stacked under z-index 99999) and is painted over
+            // by the fullscreen in-place slide (z-index 100001), so a copy is shown
+            // above it. Mirrors #mcpres-footer from getShadowOverrideCSS(); the
+            // --slide-w/--slide-h vars are :host-scoped there, so redefine them here.
+            "#mcpres-footer-inplace {",
+            "  --slide-w: min(100vw, calc(var(--mcpres-aspect) * 100vh));",
+            "  --slide-h: min(calc(100vw / var(--mcpres-aspect)), 100vh);",
+            "  display: flex; position: fixed; box-sizing: border-box;",
+            "  bottom: calc((100vh - var(--slide-h)) / 2);",
+            "  left: calc((100vw - var(--slide-w)) / 2);",
+            "  width: var(--slide-w); height: 2em; align-items: center;",
+            "  padding: 0 0.65em; font-family: 'Cabin', sans-serif;",
+            "  font-size: calc(var(--slide-w) * 0.01224);",
+            "  color: var(--mcpres-colour); opacity: var(--mcpres-page-opacity, 0.45);",
+            "  z-index: 100002; background: transparent; pointer-events: none;",
+            "}",
+            "#mcpres-footer-inplace .mcpres-footer-left { flex: 1; text-align: left; }",
+            // Same separatrix anchoring as the shadow footer (49.1% of the slide box)
+            "#mcpres-footer-inplace .mcpres-footer-center { position: absolute; left: 49.1%; transform: translateX(-50%); }",
+            "#mcpres-footer-inplace .mcpres-footer-right { flex: 1; text-align: right; padding-right: 0.3em; }"
         ].join("\n");
-        document.head.appendChild(style);
+        if (created) document.head.appendChild(style);
     }
 
     function buildShadowDOM() {
@@ -385,15 +451,18 @@
             '<div id="mcpres-footer-right"></div>';
         shadowRoot.appendChild(footer);
 
-        // Populate footer from config
+        // Populate footer from config — same layout as the PDF (doubleslides.sty):
+        // left "place, date", center author, right page numbers
         var config = document.getElementById("mcpres-config");
         if (config) {
             var author = config.dataset.author || "";
             var place = config.dataset.place || "";
             var date = config.dataset.date || "";
-            var parts = [author, place, date].filter(function(s) { return s; });
+            var parts = [place, date].filter(function(s) { return s; });
             var left = footer.querySelector("#mcpres-footer-left");
             if (left) left.textContent = parts.join(", ");
+            var center = footer.querySelector("#mcpres-footer-center");
+            if (center) center.textContent = author;
         }
 
         // Create navigation buttons
@@ -444,6 +513,13 @@
     function enterSlideMode() {
         isSlideMode = true;
         installContainsShim();
+        // Freeze the document scrollbar for the whole session: in-place slides
+        // restyle cells/ancestors, which changes the document height — the
+        // scrollbar toggling shifts 100vw and makes every vw-derived slide
+        // dimension (position, font size) jump. Also stops wheel events over
+        // in-place slides from scrolling the notebook behind the deck.
+        prevRootOverflow = document.documentElement.style.overflow;
+        document.documentElement.style.overflow = "hidden";
         suppressObserver = true;
         gatherSlides();
         buildShadowDOM();
@@ -459,10 +535,13 @@
     function exitSlideMode() {
         isSlideMode = false;
         uninstallContainsShim();
+        document.documentElement.style.overflow = prevRootOverflow;
+        prevRootOverflow = "";
         suppressObserver = true;
 
         // Return current slide to its Pluto cell before destroying viewport
         returnCurrentSlide();
+        removeInPlaceFooter();
 
         // Remove viewport overlay
         if (viewportEl && viewportEl.parentNode) {
@@ -886,6 +965,42 @@
                 }
             }
         }
+
+        syncInPlaceFooter(slide, footer);
+    }
+
+    // The shadow footer is painted over by an in-place Makie slide (see
+    // ensureMakieInPlaceCSS) — mirror it into a light-DOM clone above the slide.
+    function syncInPlaceFooter(slide, footer) {
+        var clone = document.getElementById("mcpres-footer-inplace");
+        if (!slide._mcpresInPlace || slide.type === "blank") {
+            if (clone) clone.style.display = "none";
+            return;
+        }
+        if (!clone) {
+            clone = document.createElement("div");
+            clone.id = "mcpres-footer-inplace";
+            clone.innerHTML =
+                '<div class="mcpres-footer-left"></div>' +
+                '<div class="mcpres-footer-center"></div>' +
+                '<div class="mcpres-footer-right"></div>';
+            document.body.appendChild(clone);
+        }
+        var srcLeft = footer.querySelector("#mcpres-footer-left");
+        var srcCenter = footer.querySelector("#mcpres-footer-center");
+        var srcRight = footer.querySelector("#mcpres-footer-right");
+        clone.querySelector(".mcpres-footer-left").textContent =
+            srcLeft ? srcLeft.textContent : "";
+        clone.querySelector(".mcpres-footer-center").textContent =
+            srcCenter ? srcCenter.textContent : "";
+        clone.querySelector(".mcpres-footer-right").textContent =
+            srcRight ? srcRight.textContent : "";
+        clone.style.display = "flex";
+    }
+
+    function removeInPlaceFooter() {
+        var clone = document.getElementById("mcpres-footer-inplace");
+        if (clone && clone.parentNode) clone.parentNode.removeChild(clone);
     }
 
     // --- Print Mode ---
@@ -975,7 +1090,8 @@
             place = config.dataset.place || "";
             date = config.dataset.date || "";
         }
-        var footerText = [author, place, date].filter(function(s) { return s; }).join(", ");
+        // Same layout as the PDF footer: left "place, date", center author
+        var footerText = [place, date].filter(function(s) { return s; }).join(", ");
 
         // Clone our mcpres CSS into main DOM style block for print pages
         var printStyle = document.createElement("style");
@@ -1025,6 +1141,10 @@
                 footerLeft.className = "mcpres-print-footer-left";
                 footerLeft.textContent = footerText;
 
+                var footerCenter = document.createElement("div");
+                footerCenter.className = "mcpres-print-footer-center";
+                footerCenter.textContent = author;
+
                 var footerRight = document.createElement("div");
                 footerRight.className = "mcpres-print-footer-right";
                 if ((slide.type === "double" || slide.type === "static-double") && slide.pageNum2 !== null) {
@@ -1034,6 +1154,7 @@
                 }
 
                 footer.appendChild(footerLeft);
+                footer.appendChild(footerCenter);
                 footer.appendChild(footerRight);
                 page.appendChild(footer);
             }

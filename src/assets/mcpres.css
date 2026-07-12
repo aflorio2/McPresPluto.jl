@@ -352,7 +352,8 @@
 
 .mcpres-print-page .mcpres-double-panels {
     height: calc(var(--mcpres-page-h) - 4.5em);
-    grid-template-columns: 47fr 2px 53fr;
+    /* 49.1% = measured separatrix position in the beamer PDF output */
+    grid-template-columns: 49.1fr 2px 50.9fr;
     align-items: stretch;
 }
 
@@ -447,6 +448,14 @@
     text-align: left;
 }
 
+/* Centered on the panel separatrix (grid 49.1fr 2px 50.9fr → 49.1%), matching
+   the slide-mode footer. Absolute, so left/right keep splitting the row. */
+.mcpres-print-footer-center {
+    position: absolute;
+    left: 49.1%;
+    transform: translateX(-50%);
+}
+
 .mcpres-print-footer-right {
     flex: 1;
     text-align: right;
@@ -500,7 +509,7 @@
     /* Double panels grid geometry — override Pluto's print CSS */
     #mcpres-print-layout .mcpres-double-panels {
         display: grid !important;
-        grid-template-columns: 47fr 2px 53fr !important;
+        grid-template-columns: 49.1fr 2px 50.9fr !important;
         height: calc(var(--mcpres-page-h) - 4.5em) !important;
         align-items: stretch !important;
     }
